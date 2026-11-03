@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+    input, textarea, select { -webkit-user-select: text !important; user-select: text !important; }
+    body { background:#0f172a; color:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    .modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.85); backdrop-filter:blur(5px);
+      display:flex; align-items:center; justify-content:center; z-index:1000; }
+    .view-mobile  { max-width:480px  !important; margin-left:auto; margin-right:auto; }
+    .view-desktop { max-width:1200px !important; margin-left:auto; margin-right:auto; }
+    .hidden { display:none !important; }
+    #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:2000; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 md:p-6">
+
+  <div id="main-container" class="w-full view-desktop transition-all duration-300 flex-1">
+
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-700 mb-6 gap-3">
+      <div>
+        <h1 id="app-heading" class="text-xl md:text-2xl font-bold text-white">Daily Planner</h1>
+        <span id="user-badge" class="text-xs text-slate-400">Ready</span>
+      </div>
+      <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+        <button id="view-toggle-btn" data-action="toggle-layout" class="bg-slate-800 hover:bg-slate-700 text-xs md:text-sm px-3 py-1.5 rounded-lg text-slate-200 font-semibold border border-slate-600 transition shadow">📱 Mobile View</button>
+        <button id="logout-btn" data-action="logout" class="hidden bg-red-600 hover:bg-red-700 text-xs md:text-sm px-3 py-1.5 rounded-lg text-white font-semibold transition">Logout</button>
+      </div>
+    </header>
+
+    <!-- LOGIN -->
+    <section id="login-screen" class="max-w-md mx-auto my-10 bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-2xl text-center">
+      <h2 class="text-lg font-bold text-slate-200 uppercase tracking-wider mb-1">Sign In</h2>
+      <p class="text-xs text-slate-400 mb-6">Choose how you want to enter the planner.</p>
+      <div class="text-left mb-4">
+        <label for="login-role" class="block text-xs font-semibold text-slate-300 mb-1">Role</label>
+        <select id="login-role" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500">
+          <option value="manager">Manager</option>
+          <option value="worker">Team Member</option>
+        </select>
+      </div>
+      <div id="login-worker-container" class="text-left mb-6 hidden">
+        <label for="login-worker-name" class="block text-xs font-semibold text-slate-300 mb-1">Team Member</label>
+        <select id="login-worker-name" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500"></select>
+      </div>
+      <button data-action="login" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition text-sm shadow-md">Enter</button>
+    </section>
+
+    <!-- MANAGER -->
+    <main id="manager-view" class="hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-xl p-5 shadow">
+          <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Team Performance (click a card for the full report)</h2>
+          <div id="workers-analytics-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        </div>
+
+        <div class="space-y-6">
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Assign a Task</h2>
+            <div class="space-y-3">
+              <div>
+                <label for="mgr-target-worker" class="block text-xs font-semibold text-slate-300 mb-1">Assign to</label>
+                <select id="mgr-target-worker" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs"></select>
+              </div>
+              <div>
+                <label for="mgr-new-task" class="block text-xs font-semibold text-slate-300 mb-1">Task</label>
+                <input type="text" id="mgr-new-task" maxlength="200" placeholder="e.g. Monthly closing entries" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-blue-500" />
+              </div>
+              <button data-action="assign-task" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition text-xs shadow">Assign Task</button>
+            </div>
+            <div id="mgr-assign-msg" class="text-xs font-semibold mt-3 min-h-[1rem]"></div>
+          </div>
+
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Add Team Member</h2>
+            <div class="space-y-3">
+              <input type="text" id="mgr-new-member" maxlength="60" placeholder="Name" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-blue-500" />
+              <input type="text" id="mgr-new-member-role" maxlength="60" placeholder="Role (optional)" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-blue-500" />
+              <button data-action="add-member" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded-lg transition text-xs shadow">Add Member</button>
+            </div>
+          </div>
+
+          <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Google Sheet</h2>
+            <input type="url" id="sheet-url" placeholder="Apps Script Web App URL" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-blue-500 mb-3" />
+            <div class="flex gap-2">
+              <button data-action="sync-sheet" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg transition text-xs shadow">Sync Now</button>
+              <button data-action="export-csv" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded-lg transition text-xs shadow">Export CSV</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow overflow-x-auto">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Attendance Log</h2>
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-900/60 text-slate-400 uppercase font-semibold border-b border-slate-700">
+            <tr><th class="p-3">Member</th><th class="p-3">Date &amp; Time</th><th class="p-3">Type</th><th class="p-3">Location</th></tr>
+          </thead>
+          <tbody id="manager-logs-table" class="divide-y divide-slate-700/50"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- WORKER -->
+    <main id="worker-view" class="hidden max-w-5xl mx-auto space-y-6">
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Attendance</h2>
+        <p class="text-xs text-slate-400 mb-3">Your browser will ask permission before sharing your location. You can also check in without it.</p>
+        <div class="flex flex-wrap gap-2 items-center">
+          <button data-action="check-in" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow">Check In</button>
+          <button data-action="check-out" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow">Check Out</button>
+          <label class="flex items-center gap-2 text-xs text-slate-300 ml-2"><input type="checkbox" id="share-location" checked /> Share my location</label>
+        </div>
+        <div id="worker-last-log" class="text-xs text-slate-400 mt-3"></div>
+      </div>
+
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">My Tasks</h2>
+        <p class="text-xs text-slate-400 mb-4">Update the status, write remarks, then press Save.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900/60 text-slate-400 uppercase font-semibold border-b border-slate-700">
+              <tr><th class="p-3">Task</th><th class="p-3">Assigned</th><th class="p-3">Status</th><th class="p-3">Completed</th><th class="p-3">Remarks</th><th class="p-3 text-center">Action</th></tr>
+            </thead>
+            <tbody id="worker-tasks-table" class="divide-y divide-slate-700/50"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL -->
+  <div id="worker-modal" class="modal-overlay hidden p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-5 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center pb-3 border-b border-slate-700">
+        <h3 id="modal-worker-title" class="text-base font-bold text-white">Report</h3>
+        <button data-action="close-modal" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-1 rounded transition">Close</button>
+      </div>
+      <div id="modal-worker-body" class="space-y-4"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden bg-slate-700 border border-slate-500 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xl"></div>
+
+  <footer class="w-full border-t border-slate-800 mt-8 pt-4 pb-2 text-center text-slate-400 text-xs font-medium">
+    <p>Designed by haseebmirza +971507256801 - Rights are reserved and cannot be republished of any of the part.</p>
+  </footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'dailyPlanner.v1';
+  var SHEET_KEY = 'dailyPlanner.sheetUrl';
+
+  /* ---------- helpers ---------- */
+  function $(id) { return document.getElementById(id); }
+
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function uid(p) { return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  function fmt(iso) {
+    if (!iso) return '--';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '--';
+    return d.toLocaleDateString([], { month: 'short', day: '2-digit', year: 'numeric' }) + ' - ' +
+           d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function atToday(h, m) { var d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); }
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+
+  /* ---------- state ---------- */
+  function seed() {
+    return {
+      workers: [
+        { id: 'Maria Haseeb', role: 'Senior Accounts Admin' },
+        { id: 'Test1', role: 'Assistant Clerk' },
+        { id: 'Test2', role: 'Admin Coordinator' },
+        { id: 'Test3', role: 'Document Controller' },
+        { id: 'Test4', role: 'Fee Collection Officer' },
+        { id: 'Test5', role: 'Operations Assistant' }
+      ],
+      tasks: [
+        { id: 'TS1', workerId: 'Maria Haseeb', name: 'Monthly closing entries', assignedAt: atToday(8, 0), status: 'Completed', completedAt: atToday(10, 30), remarks: 'All ledgers balanced.' },
+        { id: 'TS2', workerId: 'Maria Haseeb', name: 'Fee payment printouts handover classwise', assignedAt: atToday(8, 30), status: 'In Progress', completedAt: null, remarks: 'Grade 1-5 completed.' },
+        { id: 'TS3', workerId: 'Maria Haseeb', name: 'Principal approval on expenditure docs', assignedAt: atToday(9, 0), status: 'Pending', completedAt: null, remarks: '' },
+        { id: 'TS4', workerId: 'Test1', name: 'Classwise fee receipt distribution', assignedAt: atToday(8, 15), status: 'Completed', completedAt: atToday(11, 0), remarks: 'Handed to class teachers.' },
+        { id: 'TS5', workerId: 'Test2', name: 'Primary section attendance sheets printout', assignedAt: atToday(8, 30), status: 'In Progress', completedAt: null, remarks: 'Printing section B.' },
+        { id: 'TS6', workerId: 'Test3', name: 'Principal signature on leave applications', assignedAt: atToday(9, 0), status: 'Pending', completedAt: null, remarks: '' },
+        { id: 'TS7', workerId: 'Test4', name: 'Fee payment bank reconciliation', assignedAt: atToday(8, 10), status: 'Completed', completedAt: atToday(12, 15), remarks: 'Bank slip verified.' },
+        { id: 'TS8', workerId: 'Test5', name: 'Admin records archiving & closing', assignedAt: atToday(9, 15), status: 'Pending', completedAt: null, remarks: '' }
+      ],
+      logs: [
+        { id: 'L1', workerId: 'Maria Haseeb', at: atToday(8, 5), type: 'Check In', location: 'Location not shared' },
+        { id: 'L2', workerId: 'Test1', at: atToday(8, 15), type: 'Check In', location: 'Location not shared' }
+      ]
+    };
+  }
+
+  function validState(s) {
+    return s && Array.isArray(s.workers) && Array.isArray(s.tasks) && Array.isArray(s.logs);
+  }
+
+  function load() {
+    var raw = lsGet(STORAGE_KEY);
+    if (raw) {
+      try { var s = JSON.parse(raw); if (validState(s)) return s; } catch (e) { /* fall through */ }
+    }
+    return seed();
+  }
+
+  var state = { data: load(), user: null, role: null, mode: 'desktop' };
+  function save() { lsSet(STORAGE_KEY, JSON.stringify(state.data)); }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.add('hidden'); }, 2500);
+  }
+
+  /* ---------- worker dropdowns ---------- */
+  function workerOptions(selected) {
+    return state.data.workers.map(function (w) {
+      return '<option value="' + esc(w.id) + '"' + (w.id === selected ? ' selected' : '') + '>' + esc(w.id) + '</option>';
+    }).join('');
+  }
+
+  function refreshWorkerSelects() {
+    var a = $('login-worker-name'), b = $('mgr-target-worker');
+    var av = a.value, bv = b.value;
+    a.innerHTML = workerOptions(av);
+    b.innerHTML = workerOptions(bv);
+  }
+
+  /* ---------- auth ---------- */
+  function toggleLoginIdentity() {
+    $('login-worker-container').classList.toggle('hidden', $('login-role').value !== 'worker');
+  }
+
+  function login() {
+    var role = $('login-role').value;
+    if (role === 'worker') {
+      var name = $('login-worker-name').value;
+      if (!name) { toast('Please select a team member.'); return; }
+      state.user = name;
+    } else {
+      state.user = 'Manager';
+    }
+    state.role = role;
+
+    $('login-screen').classList.add('hidden');
+    $('logout-btn').classList.remove('hidden');
+    $('manager-view').classList.toggle('hidden', role !== 'manager');
+    $('worker-view').classList.toggle('hidden', role !== 'worker');
+    $('app-heading').textContent = role === 'manager' ? 'Manager Dashboard' : 'My Daily Planner';
+    $('user-badge').textContent = role === 'manager' ? 'Signed in as Manager' : 'Signed in as ' + state.user;
+    if (role === 'manager') $('sheet-url').value = lsGet(SHEET_KEY) || '';
+    render();
+  }
+
+  function logout() {
+    state.user = null; state.role = null;
+    closeModal();
+    $('manager-view').classList.add('hidden');
+    $('worker-view').classList.add('hidden');
+    $('logout-btn').classList.add('hidden');
+    $('login-screen').classList.remove('hidden');
+    $('app-heading').textContent = 'Daily Planner';
+    $('user-badge').textContent = 'Ready';
+  }
+
+  function toggleLayout() {
+    var c = $('main-container'), b = $('view-toggle-btn');
+    var toMobile = state.mode === 'desktop';
+    state.mode = toMobile ? 'mobile' : 'desktop';
+    c.classList.toggle('view-mobile', toMobile);
+    c.classList.toggle('view-desktop', !toMobile);
+    b.textContent = toMobile ? '🖥️ Desktop View' : '📱 Mobile View';
+  }
+
+  /* ---------- render ---------- */
+  function statusClass(s) {
+    return s === 'Completed' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+         : s === 'In Progress' ? 'bg-blue-950 text-blue-400 border border-blue-800'
+         : 'bg-amber-950 text-amber-400 border border-amber-800';
+  }
+
+  function render() {
+    refreshWorkerSelects();
+    if (state.role === 'manager') renderManager();
+    else if (state.role === 'worker') renderWorker();
+  }
+
+  function renderManager() {
+    var d = state.data;
+    $('workers-analytics-grid').innerHTML = d.workers.map(function (w) {
+      var wt = d.tasks.filter(function (t) { return t.workerId === w.id; });
+      var total = wt.length;
+      var done = wt.filter(function (t) { return t.status === 'Completed'; }).length;
+      var pct = total ? Math.round(done / total * 100) : 0;
+      var color = pct > 70 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
+      return '<div data-action="open-worker" data-id="' + esc(w.id) + '" class="bg-slate-900/60 border border-slate-700 hover:border-blue-500 rounded-lg p-4 flex flex-col items-center text-center cursor-pointer transition transform hover:-translate-y-1">' +
+        '<span class="font-bold text-sm text-white">' + esc(w.id) + '</span>' +
+        '<span class="text-xs text-slate-400 mb-3">' + esc(w.role) + '</span>' +
+        '<div class="relative w-20 h-20 rounded-full flex items-center justify-center mb-2" style="background:conic-gradient(' + color + ' ' + (pct * 3.6) + 'deg,#334155 0deg);">' +
+          '<div class="absolute w-14 h-14 bg-slate-800 rounded-full flex flex-col items-center justify-center">' +
+            '<span class="text-xs font-bold" style="color:' + color + ';">' + pct + '%</span>' +
+            '<span class="text-[9px] text-slate-400">' + done + '/' + total + '</span>' +
+          '</div></div>' +
+        '<span class="text-[10px] text-blue-400 font-semibold mt-1">View full profile &rarr;</span></div>';
+    }).join('');
+
+    var logs = d.logs.slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+    $('manager-logs-table').innerHTML = logs.length ? logs.map(function (l) {
+      return '<tr class="hover:bg-slate-700/30">' +
+        '<td class="p-3 font-semibold text-white">' + esc(l.workerId) + '</td>' +
+        '<td class="p-3 text-slate-400">' + esc(fmt(l.at)) + '</td>' +
+        '<td class="p-3"><span class="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-emerald-800">' + esc(l.type) + '</span></td>' +
+        '<td class="p-3 text-slate-300">' + esc(l.location) + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="p-3 text-slate-400">No attendance records yet.</td></tr>';
+  }
+
+  function renderWorker() {
+    var d = state.data;
+    var mine = d.tasks.filter(function (t) { return t.workerId === state.user; });
+    $('worker-tasks-table').innerHTML = mine.length ? mine.map(function (t) {
+      return '<tr class="hover:bg-slate-700/30">' +
+        '<td class="p-3 font-semibold text-white">' + esc(t.name) + '</td>' +
+        '<td class="p-3 text-slate-400 text-[11px]">' + esc(fmt(t.assignedAt)) + '</td>' +
+        '<td class="p-3"><select data-status-for="' + esc(t.id) + '" class="p-1 rounded bg-slate-900 border border-slate-700 text-xs text-white">' +
+          ['Pending', 'In Progress', 'Completed'].map(function (s) {
+            return '<option value="' + s + '"' + (t.status === s ? ' selected' : '') + '>' + s + '</option>';
+          }).join('') + '</select></td>' +
+        '<td class="p-3 text-slate-300 text-[11px]">' + esc(fmt(t.completedAt)) + '</td>' +
+        '<td class="p-3"><input type="text" data-remark-for="' + esc(t.id) + '" maxlength="300" value="' + esc(t.remarks) + '" placeholder="Write notes or remarks..." class="w-full p-1.5 rounded bg-slate-900 border border-slate-700 text-xs text-slate-200 placeholder-slate-500 focus:border-blue-500 outline-none" /></td>' +
+        '<td class="p-3 text-center"><button data-action="save-remark" data-id="' + esc(t.id) + '" class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2.5 py-1 rounded transition shadow">Save</button></td></tr>';
+    }).join('') : '<tr><td colspan="6" class="p-3 text-slate-400">No tasks assigned yet.</td></tr>';
+
+    var myLogs = d.logs.filter(function (l) { return l.workerId === state.user; })
+      .sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+    $('worker-last-log').textContent = myLogs.length
+      ? 'Last record: ' + myLogs[0].type + ' at ' + fmt(myLogs[0].at) + ' (' + myLogs[0].location + ')'
+      : 'No attendance recorded yet.';
+  }
+
+  /* ---------- modal ---------- */
+  function openModal(workerId) {
+    var d = state.data;
+    var w = d.workers.find(function (x) { return x.id === workerId; });
+    if (!w) return;
+    var wt = d.tasks.filter(function (t) { return t.workerId === workerId; });
+    var wl = d.logs.filter(function (l) { return l.workerId === workerId; });
+    var cnt = function (s) { return wt.filter(function (t) { return t.status === s; }).length; };
+
+    $('modal-worker-title').textContent = 'Report: ' + w.id + ' (' + w.role + ')';
+
+    var tasksHtml = wt.map(function (t) {
+      return '<tr class="hover:bg-slate-700/30">' +
+        '<td class="p-2.5 font-medium text-white">' + esc(t.name) + '</td>' +
+        '<td class="p-2.5 text-slate-400 text-[11px]">' + esc(fmt(t.assignedAt)) + '</td>' +
+        '<td class="p-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + statusClass(t.status) + '">' + esc(t.status) + '</span></td>' +
+        '<td class="p-2.5 text-slate-400 text-[11px]">' + esc(fmt(t.completedAt)) + '</td>' +
+        '<td class="p-2.5 text-slate-300 italic text-[11px]">' + (t.remarks ? esc(t.remarks) : 'No remarks added') + '</td></tr>';
+    }).join('');
+
+    var logsHtml = wl.map(function (l) {
+      return '<tr class="hover:bg-slate-700/30">' +
+        '<td class="p-2.5 text-slate-400 text-[11px]">' + esc(fmt(l.at)) + '</td>' +
+        '<td class="p-2.5 text-slate-200">' + esc(l.type) + '</td>' +
+        '<td class="p-2.5 text-slate-300">' + esc(l.location) + '</td></tr>';
+    }).join('');
+
+    $('modal-worker-body').innerHTML =
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">' +
+        '<div class="bg-slate-900/60 p-3.5 rounded-lg border border-slate-700"><h4 class="text-xs font-semibold text-slate-400 uppercase mb-2">Task Summary</h4>' +
+          '<p class="text-xs text-slate-300">Total: <strong>' + wt.length + '</strong></p>' +
+          '<p class="text-xs text-emerald-400">Completed: <strong>' + cnt('Completed') + '</strong></p>' +
+          '<p class="text-xs text-blue-400">In Progress: <strong>' + cnt('In Progress') + '</strong></p>' +
+          '<p class="text-xs text-amber-400">Pending: <strong>' + cnt('Pending') + '</strong></p></div>' +
+        '<div class="bg-slate-900/60 p-3.5 rounded-lg border border-slate-700"><h4 class="text-xs font-semibold text-slate-400 uppercase mb-2">Attendance Summary</h4>' +
+          '<p class="text-xs text-slate-300">Records: <strong>' + wl.length + '</strong></p></div></div>' +
+      '<h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Tasks &amp; Remarks</h4>' +
+      '<div class="overflow-x-auto"><table class="w-full text-left text-xs text-slate-300"><thead class="bg-slate-900 text-slate-400 uppercase font-semibold"><tr>' +
+        '<th class="p-2.5">Task</th><th class="p-2.5">Assigned</th><th class="p-2.5">Status</th><th class="p-2.5">Completed</th><th class="p-2.5">Remarks</th></tr></thead>' +
+        '<tbody class="divide-y divide-slate-700/50">' + (tasksHtml || '<tr><td colspan="5" class="p-2.5">No tasks assigned.</td></tr>') + '</tbody></table></div>' +
+      '<h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4 mb-2">Attendance Records</h4>' +
+      '<div class="overflow-x-auto"><table class="w-full text-left text-xs text-slate-300"><thead class="bg-slate-900 text-slate-400 uppercase font-semibold"><tr>' +
+        '<th class="p-2.5">Time</th><th class="p-2.5">Type</th><th class="p-2.5">Location</th></tr></thead>' +
+        '<tbody class="divide-y divide-slate-700/50">' + (logsHtml || '<tr><td colspan="3" class="p-2.5">No records.</td></tr>') + '</tbody></table></div>';
+
+    $('worker-modal').classList.remove('hidden');
+  }
+
+  function closeModal() { $('worker-modal').classList.add('hidden'); }
+
+  /* ---------- manager actions ---------- */
+  function assignTask() {
+    var worker = $('mgr-target-worker').value;
+    var name = $('mgr-new-task').value.trim();
+    var msg = $('mgr-assign-msg');
+    if (!worker) { msg.className = 'text-xs font-semibold mt-3 text-red-400'; msg.textContent = 'Select a team member first.'; return; }
+    if (!name) { msg.className = 'text-xs font-semibold mt-3 text-red-400'; msg.textContent = 'Enter a task title.'; return; }
+    state.data.tasks.push({ id: uid('TS'), workerId: worker, name: name, assignedAt: new Date().toISOString(), status: 'Pending', completedAt: null, remarks: '' });
+    save();
+    $('mgr-new-task').value = '';
+    msg.className = 'text-xs font-semibold mt-3 text-emerald-400';
+    msg.textContent = 'Task assigned to ' + worker + '.';
+    render();
+  }
+
+  function addMember() {
+    var name = $('mgr-new-member').value.trim();
+    var role = $('mgr-new-member-role').value.trim() || 'Team Member';
+    if (!name) { toast('Enter a name.'); return; }
+    var exists = state.data.workers.some(function (w) { return w.id.toLowerCase() === name.toLowerCase(); });
+    if (exists) { toast('That name already exists.'); return; }
+    state.data.workers.push({ id: name, role: role });
+    save();
+    $('mgr-new-member').value = ''; $('mgr-new-member-role').value = '';
+    toast('Member added.');
+    render();
+  }
+
+  function csvCell(v) {
+    var s = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // neutralise spreadsheet formulas
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+
+  function exportCsv() {
+    var rows = [['Member', 'Task', 'Assigned', 'Status', 'Completed', 'Remarks']];
+    state.data.tasks.forEach(function (t) {
+      rows.push([t.workerId, t.name, fmt(t.assignedAt), t.status, fmt(t.completedAt), t.remarks]);
+    });
+    var csv = rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
+    var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'daily-planner-tasks.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast('CSV exported.');
+  }
+
+  function syncSheet() {
+    var url = $('sheet-url').value.trim();
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^\s]+\/exec$/.test(url)) {
+      toast('Paste a valid Apps Script Web App URL (ends with /exec).'); return;
+    }
+    lsSet(SHEET_KEY, url);
+    var d = state.data;
+    var payload = {
+      workers: d.workers,
+      tasks: d.tasks.map(function (t) {
+        return { member: t.workerId, task: t.name, assigned: fmt(t.assignedAt), status: t.status, completed: fmt(t.completedAt), remarks: t.remarks };
+      }),
+      logs: d.logs.map(function (l) {
+        return { member: l.workerId, time: fmt(l.at), type: l.type, location: l.location };
+      })
+    };
+    fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) })
+      .then(function () { toast('Sent to Google Sheet. Open the sheet to confirm.'); })
+      .catch(function () { toast('Sync failed. Check your connection and URL.'); });
+  }
+
+  /* ---------- worker actions ---------- */
+  function saveRemark(taskId) {
+    var task = state.data.tasks.find(function (t) { return t.id === taskId; });
+    if (!task || task.workerId !== state.user) return;
+    var sel = document.querySelector('[data-status-for="' + taskId + '"]');
+    var inp = document.querySelector('[data-remark-for="' + taskId + '"]');
+    if (sel) {
+      var ns = sel.value;
+      if (ns !== task.status) {
+        task.status = ns;
+        task.completedAt = ns === 'Completed' ? new Date().toISOString() : null;
+      }
+    }
+    if (inp) task.remarks = inp.value.trim();
+    save();
+    toast('Saved.');
+    renderWorker();
+  }
+
+  function recordAttendance(type) {
+    var share = $('share-location').checked;
+    function finish(locText) {
+      state.data.logs.push({ id: uid('L'), workerId: state.user, at: new Date().toISOString(), type: type, location: locText });
+      save();
+      toast(type + ' recorded.');
+      renderWorker();
+    }
+    if (!share) { finish('Location not shared'); return; }
+    if (!navigator.geolocation) { finish('Location unavailable'); return; }
+    toast('Getting location...');
+    navigator.geolocation.getCurrentPosition(
+      function (p) {
+        finish(p.coords.latitude.toFixed(5) + ', ' + p.coords.longitude.toFixed(5) + ' (±' + Math.round(p.coords.accuracy) + ' m)');
+      },
+      function () { finish('Location unavailable (permission denied or timed out)'); },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    switch (el.getAttribute('data-action')) {
+      case 'toggle-layout': toggleLayout(); break;
+      case 'login': login(); break;
+      case 'logout': logout(); break;
+      case 'open-worker': openModal(el.getAttribute('data-id')); break;
+      case 'close-modal': closeModal(); break;
+      case 'assign-task': assignTask(); break;
+      case 'add-member': addMember(); break;
+      case 'sync-sheet': syncSheet(); break;
+      case 'export-csv': exportCsv(); break;
+      case 'save-remark': saveRemark(el.getAttribute('data-id')); break;
+      case 'check-in': recordAttendance('Check In'); break;
+      case 'check-out': recordAttendance('Check Out'); break;
+    }
+  });
+
+  $('login-role').addEventListener('change', toggleLoginIdentity);
+  $('mgr-new-task').addEventListener('keydown', function (e) { if (e.key === 'Enter') assignTask(); });
+  $('worker-modal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeModal();
+    var k = (e.key || '').toLowerCase();
+    var blocked = e.key === 'F12' ||
+      ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].indexOf(k) > -1) ||
+      (e.ctrlKey && ['u', 's'].indexOf(k) > -1);
+    if (blocked) e.preventDefault();
+  });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  /* ---------- init ---------- */
+  refreshWorkerSelects();
+  toggleLoginIdentity();
+
+  // exposed only for automated tests
+  window.__planner = { state: state, esc: esc };
+})();
+</script>
+</body>
+</html>
